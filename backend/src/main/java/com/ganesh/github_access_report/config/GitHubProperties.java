@@ -7,6 +7,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record GitHubProperties(
         @DefaultValue("https://api.github.com") String baseUrl,
         @DefaultValue("") String token,
+        @DefaultValue("") String clientId,
+        @DefaultValue("") String clientSecret,
+        @DefaultValue("http://localhost:8080/auth/github/callback") String redirectUri,
         @DefaultValue("100") int pageSize,
         @DefaultValue("10") int concurrency,
         @DefaultValue("10") int timeoutSeconds

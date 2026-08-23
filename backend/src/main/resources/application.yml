@@ -1,6 +1,9 @@
 github:
   base-url: ${GITHUB_BASE_URL:https://api.github.com}
   token: ${GITHUB_TOKEN:}
+  client-id: ${GITHUB_CLIENT_ID:}
+  client-secret: ${GITHUB_CLIENT_SECRET:}
+  redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:8080/auth/github/callback}
   page-size: 100
   concurrency: 10
   timeout-seconds: 10

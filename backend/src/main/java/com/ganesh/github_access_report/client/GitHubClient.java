@@ -9,5 +9,9 @@ public interface GitHubClient {
 
     List<GitHubRepository> getOrganizationRepositories(String organization);
 
+    List<GitHubRepository> getOrganizationRepositories(String organization, String authToken);
+
     List<GitHubCollaborator> getRepositoryCollaborators(String organization, String repository);
+
+    List<GitHubCollaborator> getRepositoryCollaborators(String organization, String repository, String authToken);
 }

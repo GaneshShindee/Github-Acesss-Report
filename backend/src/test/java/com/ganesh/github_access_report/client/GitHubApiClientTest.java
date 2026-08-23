@@ -28,7 +28,7 @@ class GitHubApiClientTest {
 
     @BeforeEach
     void setUp() {
-        GitHubProperties properties = new GitHubProperties("https://api.github.com", "test-token", 2, 5, 10);
+        GitHubProperties properties = new GitHubProperties("https://api.github.com", "test-token", "client-id", "client-secret", "http://localhost:8080/auth/github/callback", 2, 5, 10);
         RestClient.Builder builder = RestClient.builder().baseUrl("https://api.github.com");
         mockServer = MockRestServiceServer.bindTo(builder).build();
         restClient = builder.build();

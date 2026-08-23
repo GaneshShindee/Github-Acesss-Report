@@ -16,6 +16,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,7 +30,7 @@ class AccessReportServiceTest {
 
     @BeforeEach
     void setUp() {
-        GitHubProperties properties = new GitHubProperties("https://api.github.com", "token", 100, 5, 10);
+        GitHubProperties properties = new GitHubProperties("https://api.github.com", "token", "client-id", "client-secret", "http://localhost:8080/auth/github/callback", 100, 5, 10);
         service = new AccessReportService(gitHubClient, properties);
     }
 
@@ -38,15 +40,15 @@ class AccessReportServiceTest {
 
         GitHubRepository repo1 = new GitHubRepository(1L, "repo-two", "example-org/repo-two", false, null);
         GitHubRepository repo2 = new GitHubRepository(2L, "repo-one", "example-org/repo-one", false, null);
-        when(gitHubClient.getOrganizationRepositories(org)).thenReturn(List.of(repo1, repo2));
+        when(gitHubClient.getOrganizationRepositories(eq(org), any())).thenReturn(List.of(repo1, repo2));
 
         GitHubCollaborator aliceRepo2 = new GitHubCollaborator(101L, "alice", null, new GitHubPermissions(false, false, true, false, true));
         GitHubCollaborator bobRepo2 = new GitHubCollaborator(102L, "bob", null, new GitHubPermissions(true, false, true, false, true));
-        when(gitHubClient.getRepositoryCollaborators(org, "repo-two")).thenReturn(List.of(aliceRepo2, bobRepo2));
+        when(gitHubClient.getRepositoryCollaborators(eq(org), eq("repo-two"), any())).thenReturn(List.of(aliceRepo2, bobRepo2));
 
         GitHubCollaborator aliceRepo1 = new GitHubCollaborator(101L, "alice", null, new GitHubPermissions(true, false, true, false, true));
         GitHubCollaborator charlieRepo1 = new GitHubCollaborator(103L, "charlie", null, new GitHubPermissions(false, false, false, false, true));
-        when(gitHubClient.getRepositoryCollaborators(org, "repo-one")).thenReturn(List.of(aliceRepo1, charlieRepo1));
+        when(gitHubClient.getRepositoryCollaborators(eq(org), eq("repo-one"), any())).thenReturn(List.of(aliceRepo1, charlieRepo1));
 
         AccessReport report = service.generateAccessReport(org);
 
@@ -72,15 +74,15 @@ class AccessReportServiceTest {
         assertEquals("repo-one", charlie.repositories().get(0).repositoryName());
         assertEquals("pull", charlie.repositories().get(0).permission());
 
-        verify(gitHubClient).getOrganizationRepositories(org);
-        verify(gitHubClient).getRepositoryCollaborators(org, "repo-two");
-        verify(gitHubClient).getRepositoryCollaborators(org, "repo-one");
+        verify(gitHubClient).getOrganizationRepositories(eq(org), any());
+        verify(gitHubClient).getRepositoryCollaborators(eq(org), eq("repo-two"), any());
+        verify(gitHubClient).getRepositoryCollaborators(eq(org), eq("repo-one"), any());
     }
 
     @Test
     void generateAccessReport_EmptyOrganization() {
         String org = "empty-org";
-        when(gitHubClient.getOrganizationRepositories(org)).thenReturn(List.of());
+        when(gitHubClient.getOrganizationRepositories(eq(org), any())).thenReturn(List.of());
 
         AccessReport report = service.generateAccessReport(org);
 

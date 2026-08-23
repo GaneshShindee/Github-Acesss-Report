@@ -30,9 +30,13 @@ public class AccessReportService {
     }
 
     public AccessReport generateAccessReport(String organization) {
+        return generateAccessReport(organization, null);
+    }
+
+    public AccessReport generateAccessReport(String organization, String authToken) {
         log.info("Starting access report generation for organization: {}", organization);
 
-        List<GitHubRepository> repositories = gitHubClient.getOrganizationRepositories(organization);
+        List<GitHubRepository> repositories = gitHubClient.getOrganizationRepositories(organization, authToken);
         log.info("Found {} repositories for organization {}", repositories.size(), organization);
 
         if (repositories.isEmpty()) {
@@ -51,7 +55,7 @@ public class AccessReportService {
                         try {
                             semaphore.acquire();
                             try {
-                                fetchAndAggregateRepoCollaborators(organization, repo, userRepoMap);
+                                fetchAndAggregateRepoCollaborators(organization, repo, authToken, userRepoMap);
                             } finally {
                                 semaphore.release();
                             }
@@ -91,9 +95,10 @@ public class AccessReportService {
     private void fetchAndAggregateRepoCollaborators(
             String organization,
             GitHubRepository repo,
+            String authToken,
             Map<String, List<RepositoryAccess>> userRepoMap
     ) {
-        List<GitHubCollaborator> collaborators = gitHubClient.getRepositoryCollaborators(organization, repo.name());
+        List<GitHubCollaborator> collaborators = gitHubClient.getRepositoryCollaborators(organization, repo.name(), authToken);
         for (GitHubCollaborator collaborator : collaborators) {
             if (collaborator.login() == null || collaborator.login().isBlank()) {
                 continue;

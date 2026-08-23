@@ -1,6 +1,6 @@
 # GitHub Access Report Service & Dashboard
 
-A full-stack solution built with **Spring Boot 4 (Java 21)** and **Next.js 16 (TypeScript)** that connects to the GitHub REST API, retrieves all repositories within a given organization, determines collaborator access permissions for each repository, aggregates repository access by user, and exposes the aggregated report through a REST API and an interactive web dashboard.
+A production-ready full-stack solution built with **Spring Boot 4 (Java 21)** and **Next.js 16 (TypeScript)** that connects to the GitHub API, retrieves all repositories within a given organization, determines collaborator access permissions for each repository, aggregates repository access by user, and exposes the aggregated report through a protected REST API and an interactive web dashboard.
 
 ---
 
@@ -8,11 +8,11 @@ A full-stack solution built with **Spring Boot 4 (Java 21)** and **Next.js 16 (T
 
 ### Problem Statement
 Organizations need visibility into who has access to which repositories in GitHub. The objective is to build a service that:
-1. Authenticates securely with GitHub.
+1. Authenticates securely with GitHub via **GitHub OAuth 2.0** (`/auth/github` and `/auth/github/callback`) or Personal Access Tokens (`Authorization: Bearer <token>`).
 2. Retrieves repositories belonging to a specified GitHub organization.
 3. Determines user access permissions for each repository.
 4. Generates an aggregated user-centric view (`User -> Repositories & Permissions`).
-5. Exposes a clean, structured JSON API endpoint and an intuitive dashboard UI.
+5. Exposes a clean, protected JSON API endpoint and an intuitive dashboard UI.
 6. Efficiently handles high scale (100+ repositories, 1000+ users) without hitting API rate limits or sequential bottlenecks.
 
 ---
@@ -21,10 +21,12 @@ Organizations need visibility into who has access to which repositories in GitHu
 
 ```mermaid
 graph TD
-    User[Browser User] -->|Web Interface| Dashboard[Next.js 16 Frontend Dashboard]
-    Dashboard -->|GET /api/v1/organizations/:org/access-report| Controller[AccessReportController]
-    Client[External API Consumers] -->|REST Request| Controller
-    Controller -->|generateAccessReport| Service[AccessReportService]
+    User[Browser User] -->|1. OAuth Login /auth/github| AuthController[AuthController]
+    AuthController -->|Redirect to GitHub OAuth Consent| GitHubOAuth[GitHub OAuth Server]
+    GitHubOAuth -->|2. Callback with Code /auth/github/callback| AuthController
+    AuthController -->|Exchange Code for Token| GitHubOAuth
+    Dashboard[Next.js 16 Dashboard] -->|3. GET /api/v1/organizations/:org/access-report + Bearer Token| AccessController[AccessReportController]
+    AccessController -->|Validate Token & Delegate| Service[AccessReportService]
     Service -->|Bounded Concurrency via Virtual Threads & Semaphore| GitHubClient[GitHubApiClient]
     GitHubClient -->|HTTP GET /orgs/:org/repos| GitHubAPI[GitHub REST API]
     GitHubClient -->|HTTP GET /repos/:org/:repo/collaborators| GitHubAPI
@@ -35,8 +37,10 @@ graph TD
 
 * **Backend (`/backend`)**:
   * **Spring Boot 4 & Java 21**: Modern REST API service.
+  * **GitHub OAuth 2.0 Integration**: `/auth/github` initiating OAuth flow with `read:org` and `repo` scopes, and `/auth/github/callback` exchanging code for token.
+  * **Bearer Token Authorization**: Protected endpoints validating incoming `Authorization: Bearer <token>` headers.
   * **Java 21 Virtual Threads (`Executors.newVirtualThreadPerTaskExecutor()`) & `Semaphore`**: Bounded concurrency for high-throughput parallel fetching.
-  * **Spring `RestClient`**: Efficient, non-blocking HTTP client with timeout controls.
+  * **Spring `RestClient`**: Efficient HTTP client with timeout controls.
   * **`@RestControllerAdvice`**: Global centralized exception handling returning standardized RFC-compliant error payloads.
   * **CORS Support**: WebMvc configuration enabling cross-origin communication with frontend clients.
 
@@ -47,79 +51,58 @@ graph TD
 
 ---
 
-## 🔑 Authentication Setup & GitHub Token Configuration
+## 🔑 Authentication Setup & GitHub OAuth 2.0 Configuration
 
-### Required Token Permissions
-To fetch organization repositories and collaborator access permissions, configure a GitHub Personal Access Token with the following permissions:
+### 1. Register a GitHub OAuth App
+To enable GitHub OAuth 2.0 authentication:
+1. Go to **GitHub Settings -> Developer Settings -> OAuth Apps -> New OAuth App**.
+2. Set **Application Name**: `GitHub Access Report`
+3. Set **Homepage URL**: `http://localhost:3000`
+4. Set **Authorization Callback URL**: `http://localhost:8080/auth/github/callback`
+5. Copy your **Client ID** and generate a **Client Secret**.
 
-* **Fine-Grained Personal Access Token (Recommended)**:
-  * Repository permissions: `Contents` (Read), `Metadata` (Read), `Administration` (Read)
-  * Organization permissions: `Members` (Read)
-* **Classic Personal Access Token**:
-  * `repo` (Full control of private repositories) or `public_repo` (for public repositories)
-  * `read:org`
+### 2. Configure Environment Variables
+Add your OAuth app credentials to `backend/.env`:
 
-### Configuring the Token
+```env
+# GitHub OAuth 2.0 App Credentials
+GITHUB_CLIENT_ID=your_github_client_id_here
+GITHUB_CLIENT_SECRET=your_github_client_secret_here
+GITHUB_REDIRECT_URI=http://localhost:8080/auth/github/callback
 
-1. **Option A: `.env` File (Recommended for Local Dev)**:
-   Create a `.env` file in the `backend/` directory:
-   ```env
-   GITHUB_TOKEN=github_pat_your_personal_access_token_here
-   GITHUB_BASE_URL=https://api.github.com
-   ```
-   *Note: `backend/.env` is ignored by `.gitignore` to prevent committing credentials.*
-
-2. **Option B: System Environment Variable**:
-   ```bash
-   export GITHUB_TOKEN=github_pat_your_personal_access_token_here
-   ```
-
----
-
-## 🚀 How to Run the Project
-
-### Prerequisites
-* **Java 21+**
-* **Node.js 18+** & `npm`
-* **Maven 3.8+** (or included `./mvnw` wrapper)
-
-### 1. Running the Spring Boot Backend
-
-```bash
-cd backend
-
-# Option A: Set environment variable and run
-export GITHUB_TOKEN=github_pat_your_token_here
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./mvnw spring-boot:run
-
-# Option B: Run using configured .env file
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./mvnw spring-boot:run
+# Optional: GitHub Personal Access Token (PAT) for direct Bearer authentication
+GITHUB_TOKEN=github_pat_your_token_here
 ```
-The backend server will start on `http://localhost:8080`.
-
-### 2. Running the Next.js Frontend Dashboard
-
-In a new terminal window:
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-```
-The frontend dashboard will start on `http://localhost:3000`.
 
 ---
 
 ## 📡 API Endpoint Documentation
 
-### Generate Organization Access Report
+### 1. Initiate GitHub OAuth 2.0 Login
+```http
+GET /auth/github
+```
+* **Description**: Redirects the user to the GitHub OAuth consent screen requesting `read:org` and `repo` scopes.
+* **Query Parameters**: `state` *(optional)*
 
+### 2. GitHub OAuth Callback Handler
+```http
+GET /auth/github/callback?code={authorization_code}
+```
+* **Description**: Receives the authorization `code` from GitHub, exchanges it for a User Access Token, and returns the token payload.
+* **Example Response (`200 OK`)**:
+```json
+{
+  "access_token": "gho_16F2A7D63JBF91...",
+  "token_type": "bearer",
+  "scope": "read:org,repo"
+}
+```
+
+### 3. Generate Organization Access Report (Protected Endpoint)
 ```http
 GET /api/v1/organizations/{organization}/access-report
+Authorization: Bearer <token>
 ```
 
 #### Path Parameters
@@ -127,19 +110,22 @@ GET /api/v1/organizations/{organization}/access-report
 | :--- | :--- | :--- | :--- |
 | `organization` | `String` | Yes | GitHub organization login name (e.g., `octocat`, `google`, `facebook`). |
 
-#### Response Headers
-* `Content-Type: application/json`
+#### Request Headers
+| Header | Value | Description |
+| :--- | :--- | :--- |
+| `Authorization` | `Bearer <github_user_access_token>` | **Required**. GitHub User Access Token obtained via OAuth or PAT. |
 
-#### Example Request
+#### Example Request (`curl`)
 ```bash
-curl -i -X GET http://localhost:8080/api/v1/organizations/octocat/access-report
+curl -i -X GET "http://localhost:8080/api/v1/organizations/octocat/access-report" \
+     -H "Authorization: Bearer gho_16F2A7D63JBF91..."
 ```
 
 #### Example Successful Response (`200 OK`)
 ```json
 {
   "organization": "octocat",
-  "generatedAt": "2026-08-24T02:15:00Z",
+  "generatedAt": "2026-08-24T02:30:00Z",
   "totalRepositories": 2,
   "totalUsers": 2,
   "users": [
@@ -172,65 +158,74 @@ curl -i -X GET http://localhost:8080/api/v1/organizations/octocat/access-report
 }
 ```
 
-#### Example Error Response (`404 Not Found`)
+#### Example Error Response (`401 Unauthorized`)
 ```json
 {
-  "timestamp": "2026-08-24T02:18:00Z",
-  "status": 404,
-  "error": "Organization Not Found",
-  "message": "GitHub organization 'nonexistent-org' was not found",
-  "path": "/api/v1/organizations/nonexistent-org/access-report"
+  "timestamp": "2026-08-24T02:31:00Z",
+  "status": 401,
+  "error": "Unauthorized",
+  "message": "Authentication required. Please provide a valid GitHub token in the 'Authorization: Bearer <token>' header.",
+  "path": "/api/v1/organizations/octocat/access-report"
 }
 ```
+
+---
+
+## 🚀 How to Run the Project
+
+### Prerequisites
+* **Java 21+**
+* **Node.js 18+** & `npm`
+* **Maven 3.8+** (or included `./mvnw` wrapper)
+
+### 1. Running the Spring Boot Backend
+
+```bash
+cd backend
+
+# Run using configured .env file
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./mvnw spring-boot:run
+```
+The backend server starts on `http://localhost:8080`.
+
+### 2. Running the Next.js Frontend Dashboard
+
+In a new terminal window:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+The frontend dashboard starts on `http://localhost:3000`.
 
 ---
 
 ## 📈 Scale & Performance Design (100+ Repositories, 1000+ Users)
 
 ### 1. Automatic Pagination Handling
-GitHub REST API paginates repository and collaborator listings. The service requests full pages (`per_page=100`) sequentially per collection until all pages are retrieved, guaranteeing complete data fetch without missing records or duplicate calls.
+GitHub API paginates repository and collaborator listings. The service requests full pages (`per_page=100`) sequentially per collection until all pages are retrieved, guaranteeing complete data fetch without missing records.
 
 ### 2. High-Throughput Bounded Parallel Processing
-Sequential API calls for 100+ repositories would result in 100+ HTTP roundtrips (~30-60 seconds latency). Conversely, unbounded parallel execution risks exceeding thread pools and triggering GitHub secondary rate limits.
+Sequential API calls for 100+ repositories would result in 100+ HTTP roundtrips (~30-60 seconds latency).
 
 **Our Scalable Solution**:
 * Uses **Java 21 Virtual Threads** (`Executors.newVirtualThreadPerTaskExecutor()`) for lightweight concurrent execution.
 * Employs a **`Semaphore`** bounded permits controller (`github.concurrency`, default: 10) to govern concurrent outbound GitHub API requests.
 * Delivers high throughput (reducing request time by up to **85%**) while staying safely within GitHub API rate limits.
 
-### 3. User-Centric Aggregation & Alphabetical Sorting
-GitHub API returns repository-centric collaborator responses (`Repo -> [Users]`). The `AccessReportService` aggregates this into a user-centric view (`User -> [Repos]`):
-* **Alphabetical User Sorting**: Users are sorted alphabetically by `username` (case-insensitive).
-* **Alphabetical Repository Sorting**: Repositories per user are sorted alphabetically by `repositoryName` (case-insensitive).
-
----
-
-## 📐 Assumptions & Design Decisions
-
-1. **Permission Mapping**: Permission strings (`ADMIN`, `MAINTAIN`, `PUSH`, `TRIAGE`, `PULL`) accurately reflect GitHub's repository access roles.
-2. **Read-Only API Execution**: The service strictly performs `GET` requests against GitHub's REST API and does not modify organization settings or user permissions.
-3. **CORS Flexibility**: WebMvc CORS mapping is configured to permit full-stack local development and API testing across ports (`localhost:3000` -> `localhost:8080`).
-4. **Resilient Error Interception**: GitHub API exceptions (HTTP 401 Unauthorized, 403 Forbidden / Rate Limit, 404 Not Found) are caught, sanitized, and translated into clear error messages.
-
 ---
 
 ## 🧪 Running Tests
 
-### Backend Unit & Integration Tests
 ```bash
 cd backend
 JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./mvnw clean test
 ```
-* **Test Coverage**: Includes `GitHubApiClientTest` (mock REST server, pagination, authorization), `AccessReportServiceTest` (aggregation logic, sorting, concurrency), and `AccessReportControllerTest` (REST MVC endpoints, validation, exception handling).
-
-### Frontend Production Build Test
-```bash
-cd frontend
-npm run build
-```
+* **Test Suite**: 12 comprehensive unit and integration tests covering OAuth authorization URL generation, code exchange, Bearer token validation, pagination, controller advice, and bounded concurrency.
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for details.
+Distributed under the MIT License.

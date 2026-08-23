@@ -31,6 +31,11 @@ public class GitHubApiClient implements GitHubClient {
 
     @Override
     public List<GitHubRepository> getOrganizationRepositories(String organization) {
+        return getOrganizationRepositories(organization, null);
+    }
+
+    @Override
+    public List<GitHubRepository> getOrganizationRepositories(String organization, String authToken) {
         log.debug("Fetching repositories for organization: {}", organization);
         List<GitHubRepository> allRepositories = new ArrayList<>();
         int page = 1;
@@ -42,7 +47,7 @@ public class GitHubApiClient implements GitHubClient {
                 RestClient.RequestHeadersSpec<?> spec = restClient.get()
                         .uri("/orgs/{org}/repos?per_page={perPage}&page={page}", organization, pageSize, currentPage);
 
-                spec = applyAuthorizationHeader(spec);
+                spec = applyAuthorizationHeader(spec, authToken);
 
                 List<GitHubRepository> pageRepos = spec.retrieve()
                         .onStatus(HttpStatusCode::isError, (req, resp) -> handleHttpError(resp.getStatusCode(), organization, "organization repos"))
@@ -69,6 +74,11 @@ public class GitHubApiClient implements GitHubClient {
 
     @Override
     public List<GitHubCollaborator> getRepositoryCollaborators(String organization, String repository) {
+        return getRepositoryCollaborators(organization, repository, null);
+    }
+
+    @Override
+    public List<GitHubCollaborator> getRepositoryCollaborators(String organization, String repository, String authToken) {
         log.debug("Fetching collaborators for repository {}/{}", organization, repository);
         List<GitHubCollaborator> allCollaborators = new ArrayList<>();
         int page = 1;
@@ -80,7 +90,7 @@ public class GitHubApiClient implements GitHubClient {
                 RestClient.RequestHeadersSpec<?> spec = restClient.get()
                         .uri("/repos/{org}/{repo}/collaborators?per_page={perPage}&page={page}", organization, repository, pageSize, currentPage);
 
-                spec = applyAuthorizationHeader(spec);
+                spec = applyAuthorizationHeader(spec, authToken);
 
                 List<GitHubCollaborator> pageCollaborators = spec.retrieve()
                         .onStatus(HttpStatusCode::isError, (req, resp) -> handleHttpError(resp.getStatusCode(), organization, "repository collaborators"))
@@ -105,9 +115,11 @@ public class GitHubApiClient implements GitHubClient {
         return allCollaborators;
     }
 
-    private RestClient.RequestHeadersSpec<?> applyAuthorizationHeader(RestClient.RequestHeadersSpec<?> spec) {
-        if (properties.token() != null && !properties.token().isBlank()) {
-            String token = properties.token().trim();
+    private RestClient.RequestHeadersSpec<?> applyAuthorizationHeader(RestClient.RequestHeadersSpec<?> spec, String authToken) {
+        String tokenToUse = (authToken != null && !authToken.isBlank()) ? authToken : properties.token();
+
+        if (tokenToUse != null && !tokenToUse.isBlank()) {
+            String token = tokenToUse.trim();
             if (token.startsWith("Bearer ") || token.startsWith("token ")) {
                 return spec.header("Authorization", token);
             }
@@ -121,7 +133,7 @@ public class GitHubApiClient implements GitHubClient {
         if (code == 404) {
             throw new OrganizationNotFoundException(resource);
         } else if (code == 401) {
-            throw new GitHubApiException("Unauthorized access to GitHub API for " + resource + ". Please check GITHUB_TOKEN.", 401);
+            throw new GitHubApiException("Unauthorized access to GitHub API for " + resource + ". Invalid or expired GitHub token.", 401);
         } else if (code == 403) {
             throw new GitHubApiException("Access forbidden or GitHub API rate limit exceeded for " + resource, 403);
         } else {
@@ -134,7 +146,7 @@ public class GitHubApiClient implements GitHubClient {
         if (code == 404) {
             throw new OrganizationNotFoundException(resource);
         } else if (code == 401) {
-            throw new GitHubApiException("Unauthorized access to GitHub API for " + resource + ". Please check GITHUB_TOKEN.", 401);
+            throw new GitHubApiException("Unauthorized access to GitHub API for " + resource + ". Invalid or expired GitHub token.", 401);
         } else if (code == 403) {
             throw new GitHubApiException("Access forbidden or GitHub API rate limit exceeded for " + resource, 403);
         } else {
