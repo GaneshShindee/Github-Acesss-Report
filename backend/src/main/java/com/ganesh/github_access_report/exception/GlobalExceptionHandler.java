@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.Instant;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -89,6 +91,29 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler({CompletionException.class, ExecutionException.class})
+    public ResponseEntity<ErrorResponse> handleAsyncExecutionException(
+            Exception ex,
+            HttpServletRequest request
+    ) {
+        Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+        if (cause instanceof OrganizationNotFoundException) {
+            return handleOrganizationNotFound((OrganizationNotFoundException) cause, request);
+        } else if (cause instanceof GitHubApiException) {
+            return handleGitHubApiException((GitHubApiException) cause, request);
+        }
+
+        log.error("Async execution error while processing request {}: {}", request.getRequestURI(), cause.getMessage(), cause);
+        ErrorResponse errorResponse = new ErrorResponse(
+                Instant.now(),
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                "Internal Server Error",
+                cause.getMessage() != null ? cause.getMessage() : "An unexpected error occurred.",
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
     }
 
     @ExceptionHandler(Exception.class)

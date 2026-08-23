@@ -2,6 +2,7 @@ package com.ganesh.github_access_report.service;
 
 import com.ganesh.github_access_report.client.GitHubClient;
 import com.ganesh.github_access_report.config.GitHubProperties;
+import com.ganesh.github_access_report.exception.GitHubApiException;
 import com.ganesh.github_access_report.model.github.GitHubCollaborator;
 import com.ganesh.github_access_report.model.github.GitHubRepository;
 import com.ganesh.github_access_report.model.report.AccessReport;
@@ -98,18 +99,24 @@ public class AccessReportService {
             String authToken,
             Map<String, List<RepositoryAccess>> userRepoMap
     ) {
-        List<GitHubCollaborator> collaborators = gitHubClient.getRepositoryCollaborators(organization, repo.name(), authToken);
-        for (GitHubCollaborator collaborator : collaborators) {
-            if (collaborator.login() == null || collaborator.login().isBlank()) {
-                continue;
+        try {
+            List<GitHubCollaborator> collaborators = gitHubClient.getRepositoryCollaborators(organization, repo.name(), authToken);
+            for (GitHubCollaborator collaborator : collaborators) {
+                if (collaborator.login() == null || collaborator.login().isBlank()) {
+                    continue;
+                }
+                RepositoryAccess access = new RepositoryAccess(
+                        repo.name(),
+                        repo.fullName() != null ? repo.fullName() : organization + "/" + repo.name(),
+                        collaborator.resolvePermission()
+                );
+                userRepoMap.computeIfAbsent(collaborator.login(), k -> Collections.synchronizedList(new ArrayList<>()))
+                        .add(access);
             }
-            RepositoryAccess access = new RepositoryAccess(
-                    repo.name(),
-                    repo.fullName() != null ? repo.fullName() : organization + "/" + repo.name(),
-                    collaborator.resolvePermission()
-            );
-            userRepoMap.computeIfAbsent(collaborator.login(), k -> Collections.synchronizedList(new ArrayList<>()))
-                    .add(access);
+        } catch (GitHubApiException e) {
+            log.warn("Skipping repository {}/{} due to access/permission restriction ({}): {}", organization, repo.name(), e.getStatusCode(), e.getMessage());
+        } catch (Exception e) {
+            log.warn("Unexpected error fetching collaborators for repository {}/{}: {}", organization, repo.name(), e.getMessage());
         }
     }
 }
