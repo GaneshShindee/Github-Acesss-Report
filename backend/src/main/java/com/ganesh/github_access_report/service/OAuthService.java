@@ -29,7 +29,7 @@ public class OAuthService {
     public String buildAuthorizationUrl(String state) {
         String clientId = properties.clientId();
         if (clientId == null || clientId.isBlank()) {
-            throw new GitHubApiException("GitHub Client ID is not configured. Please set GITHUB_CLIENT_ID.", 500);
+            throw new IllegalStateException("GitHub OAuth Client ID is not configured. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in backend/.env, or use your Personal Access Token (PAT).");
         }
 
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString("https://github.com/login/oauth/authorize")
@@ -53,7 +53,7 @@ public class OAuthService {
         String clientSecret = properties.clientSecret();
 
         if (clientId == null || clientId.isBlank() || clientSecret == null || clientSecret.isBlank()) {
-            throw new GitHubApiException("GitHub OAuth credentials (client-id, client-secret) are not configured.", 500);
+            throw new IllegalStateException("GitHub OAuth credentials (GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET) are not configured in backend/.env.");
         }
 
         Map<String, String> requestBody = new HashMap<>();
@@ -85,8 +85,8 @@ public class OAuthService {
             return response;
 
         } catch (Exception ex) {
-            if (ex instanceof GitHubApiException) {
-                throw (GitHubApiException) ex;
+            if (ex instanceof GitHubApiException || ex instanceof IllegalStateException) {
+                throw ex;
             }
             log.error("Error during GitHub OAuth token exchange", ex);
             throw new GitHubApiException("Failed to exchange OAuth code for access token: " + ex.getMessage(), 400, ex);

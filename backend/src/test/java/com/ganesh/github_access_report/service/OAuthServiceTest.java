@@ -49,6 +49,6 @@ class OAuthServiceTest {
                 "https://api.github.com", "", "", "", "", 100, 10, 10
         );
         OAuthService service = new OAuthService(emptyProps, restClient);
-        assertThrows(GitHubApiException.class, () -> service.buildAuthorizationUrl(null));
+        assertThrows(IllegalStateException.class, () -> service.buildAuthorizationUrl(null));
     }
 }
