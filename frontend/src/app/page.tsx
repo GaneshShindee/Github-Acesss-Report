@@ -4,8 +4,8 @@ import React, { useState, useEffect } from "react";
 import { ShieldCheck, Info, Key, LogOut, CheckCircle2, Lock, X } from "lucide-react";
 import { GithubIcon } from "@/components/ui/GithubIcon";
 import { Button } from "@/components/ui/Button";
-import { AccessReport } from "@/types/access-report";
-import { getAccessReport, getOAuthLoginUrl, ApiError } from "@/lib/api";
+import { AccessReport, GitHubOrg, GitHubUser } from "@/types/access-report";
+import { getAccessReport, getOAuthLoginUrl, getUserOrganizations, getAuthenticatedUser, ApiError } from "@/lib/api";
 import { OrganizationSearch } from "@/components/organization/OrganizationSearch";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -17,8 +17,10 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Authentication State
+  // Authentication & User State
   const [authToken, setAuthToken] = useState<string>("");
+  const [currentUser, setCurrentUser] = useState<GitHubUser | null>(null);
+  const [userOrgs, setUserOrgs] = useState<GitHubOrg[]>([]);
   const [showTokenInput, setShowTokenInput] = useState<boolean>(false);
   const [tempToken, setTempToken] = useState<string>("");
   const [oauthSuccessToast, setOauthSuccessToast] = useState<boolean>(false);
@@ -50,6 +52,16 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+    if (authToken) {
+      getUserOrganizations(authToken).then((orgs) => setUserOrgs(orgs));
+      getAuthenticatedUser(authToken).then((user) => setCurrentUser(user));
+    } else {
+      setUserOrgs([]);
+      setCurrentUser(null);
+    }
+  }, [authToken]);
+
   const handleSaveToken = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = tempToken.trim();
@@ -65,6 +77,8 @@ export default function Home() {
   const handleClearToken = () => {
     setAuthToken("");
     setTempToken("");
+    setCurrentUser(null);
+    setUserOrgs([]);
     localStorage.removeItem("github_access_token");
   };
 
@@ -142,11 +156,15 @@ export default function Home() {
               <span className="sm:hidden">OAuth</span>
             </Button>
 
-            {/* Custom Token Toggle */}
+            {/* Custom Token / Logged-in User Indicator */}
             {authToken ? (
-              <div className="flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 px-2.5 py-1 rounded-lg text-xs font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">Token Active</span>
+              <div className="flex items-center gap-2 bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 px-2.5 py-1 rounded-lg text-xs font-medium">
+                {currentUser?.avatar_url ? (
+                  <img src={currentUser.avatar_url} alt={currentUser.login} className="w-4 h-4 rounded-full" />
+                ) : (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+                <span className="hidden sm:inline">{currentUser?.login || "Token Active"}</span>
                 <button
                   onClick={handleClearToken}
                   title="Clear token"
@@ -217,11 +235,12 @@ export default function Home() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Search Bar Component */}
+        {/* Search Bar & User Organizations Selector Component */}
         <OrganizationSearch
           onSearch={handleSearch}
           isLoading={isLoading}
           initialValue={searchedOrg}
+          userOrgs={userOrgs}
         />
 
         {/* Content Section based on state */}
@@ -248,7 +267,7 @@ export default function Home() {
                 Ready to Explore Organization Access
               </h3>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-                Enter a GitHub organization to generate an access report. You can also sign in with GitHub OAuth or provide a custom token in the header.
+                Enter a GitHub organization to generate an access report. You can also sign in with GitHub OAuth or select from your organizations.
               </p>
             </div>
           )}

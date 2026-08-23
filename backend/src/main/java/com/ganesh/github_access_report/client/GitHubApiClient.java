@@ -4,7 +4,9 @@ import com.ganesh.github_access_report.config.GitHubProperties;
 import com.ganesh.github_access_report.exception.GitHubApiException;
 import com.ganesh.github_access_report.exception.OrganizationNotFoundException;
 import com.ganesh.github_access_report.model.github.GitHubCollaborator;
+import com.ganesh.github_access_report.model.github.GitHubOrg;
 import com.ganesh.github_access_report.model.github.GitHubRepository;
+import com.ganesh.github_access_report.model.github.GitHubUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
@@ -27,6 +29,40 @@ public class GitHubApiClient implements GitHubClient {
     public GitHubApiClient(RestClient restClient, GitHubProperties properties) {
         this.restClient = restClient;
         this.properties = properties;
+    }
+
+    @Override
+    public GitHubUser getAuthenticatedUser(String authToken) {
+        log.debug("Fetching authenticated user details");
+        try {
+            RestClient.RequestHeadersSpec<?> spec = restClient.get().uri("/user");
+            spec = applyAuthorizationHeader(spec, authToken);
+
+            return spec.retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, resp) -> handleHttpError(resp.getStatusCode(), "user", "authenticated user"))
+                    .body(GitHubUser.class);
+        } catch (RestClientResponseException ex) {
+            handleException(ex, "user", "authenticated user");
+            return null;
+        }
+    }
+
+    @Override
+    public List<GitHubOrg> getUserOrganizations(String authToken) {
+        log.debug("Fetching organizations for authenticated user");
+        try {
+            RestClient.RequestHeadersSpec<?> spec = restClient.get().uri("/user/orgs?per_page=100");
+            spec = applyAuthorizationHeader(spec, authToken);
+
+            List<GitHubOrg> orgs = spec.retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, resp) -> handleHttpError(resp.getStatusCode(), "user/orgs", "user organizations"))
+                    .body(new ParameterizedTypeReference<List<GitHubOrg>>() {});
+
+            return orgs != null ? orgs : List.of();
+        } catch (RestClientResponseException ex) {
+            log.warn("Unable to fetch user organizations: {}", ex.getMessage());
+            return List.of();
+        }
     }
 
     @Override

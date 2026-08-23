@@ -1,4 +1,4 @@
-import { AccessReport, ApiErrorResponse } from "@/types/access-report";
+import { AccessReport, ApiErrorResponse, GitHubOrg, GitHubUser } from "@/types/access-report";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
@@ -19,6 +19,40 @@ export class ApiError extends Error {
 export function getOAuthLoginUrl(state?: string): string {
   const url = `${API_BASE_URL}/auth/github`;
   return state ? `${url}?state=${encodeURIComponent(state)}` : url;
+}
+
+export async function getAuthenticatedUser(token?: string): Promise<GitHubUser | null> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token && token.trim()) {
+    headers["Authorization"] = token.trim().startsWith("Bearer ")
+      ? token.trim()
+      : `Bearer ${token.trim()}`;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/user/me`, { headers });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function getUserOrganizations(token?: string): Promise<GitHubOrg[]> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token && token.trim()) {
+    headers["Authorization"] = token.trim().startsWith("Bearer ")
+      ? token.trim()
+      : `Bearer ${token.trim()}`;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/user/orgs`, { headers });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
 }
 
 /**

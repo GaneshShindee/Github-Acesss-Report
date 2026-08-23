@@ -32,3 +32,16 @@ export interface ApiErrorResponse {
   error?: string;
   message: string;
 }
+
+export interface GitHubUser {
+  login: string;
+  name?: string;
+  avatar_url?: string;
+  html_url?: string;
+}
+
+export interface GitHubOrg {
+  login: string;
+  description?: string;
+  avatar_url?: string;
+}
