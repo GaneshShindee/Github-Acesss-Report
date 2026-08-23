@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Search, Users, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Users, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileCode } from "lucide-react";
 import { UserAccess } from "@/types/access-report";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -15,6 +15,7 @@ interface UserAccessTableProps {
 export function UserAccessTable({ users, organization }: UserAccessTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedUsernames, setExpandedUsernames] = useState<Set<string>>(new Set());
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Filter & Sort users alphabetically by username
   const filteredUsers = useMemo(() => {
@@ -55,6 +56,52 @@ export function UserAccessTable({ users, organization }: UserAccessTableProps) {
     }
   };
 
+  const exportToCSV = () => {
+    if (!users || users.length === 0) return;
+
+    const rows: string[][] = [["Username", "Repository Name", "Full Repository Name", "Permission"]];
+
+    users.forEach((user) => {
+      (user.repositories || []).forEach((repo) => {
+        rows.push([
+          `"${user.username}"`,
+          `"${repo.repositoryName}"`,
+          `"${repo.repositoryFullName}"`,
+          `"${repo.permission}"`,
+        ]);
+      });
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," + rows.map((e) => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${organization}-access-report.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowExportMenu(false);
+  };
+
+  const exportToJSON = () => {
+    const dataStr =
+      "data:text/json;charset=utf-8," +
+      encodeURIComponent(
+        JSON.stringify(
+          { organization, generatedAt: new Date().toISOString(), totalUsers: users.length, users },
+          null,
+          2
+        )
+      );
+    const link = document.createElement("a");
+    link.setAttribute("href", dataStr);
+    link.setAttribute("download", `${organization}-access-report.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowExportMenu(false);
+  };
+
   const allExpanded =
     filteredUsers.length > 0 && expandedUsernames.size === filteredUsers.length;
 
@@ -73,7 +120,7 @@ export function UserAccessTable({ users, organization }: UserAccessTableProps) {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="w-full sm:w-72">
+          <div className="w-full sm:w-64">
             <Input
               placeholder="Search users..."
               value={searchQuery}
@@ -83,12 +130,45 @@ export function UserAccessTable({ users, organization }: UserAccessTableProps) {
             />
           </div>
 
+          {/* Export Dropdown */}
+          <div className="relative">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="text-xs h-[38px] px-3 flex items-center gap-1.5 border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200"
+              leftIcon={<Download className="w-3.5 h-3.5" />}
+            >
+              Export
+              <ChevronDown className="w-3 h-3 ml-0.5" />
+            </Button>
+
+            {showExportMenu && (
+              <div className="absolute right-0 mt-2 w-44 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl z-50 py-1.5 backdrop-blur-xl">
+                <button
+                  onClick={exportToCSV}
+                  className="w-full px-3 py-2 text-left text-xs text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition-colors"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Export as CSV</span>
+                </button>
+                <button
+                  onClick={exportToJSON}
+                  className="w-full px-3 py-2 text-left text-xs text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition-colors"
+                >
+                  <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Export as JSON</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {filteredUsers.length > 0 && (
             <Button
               variant="ghost"
               size="sm"
               onClick={handleExpandAll}
-              className="text-xs shrink-0 self-end sm:self-center border border-slate-800 hover:border-slate-700"
+              className="text-xs shrink-0 h-[38px] border border-slate-800 hover:border-slate-700"
               rightIcon={
                 allExpanded ? (
                   <ChevronUp className="w-3.5 h-3.5" />
