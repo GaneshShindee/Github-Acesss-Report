@@ -1,0 +1,24 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*
+!.env.example
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Target and Build
+target/
+.next/
+out/
+build/
+node_modules/
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/

@@ -1,0 +1,10 @@
+github:
+  base-url: ${GITHUB_BASE_URL:https://api.github.com}
+  token: ${GITHUB_TOKEN:}
+  page-size: 100
+  concurrency: 10
+  timeout-seconds: 10
+
+spring:
+  application:
+    name: github-access-report
