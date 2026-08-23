@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, Info, Key, LogOut, CheckCircle2, Lock } from "lucide-react";
+import { ShieldCheck, Info, Key, LogOut, CheckCircle2, Lock, X } from "lucide-react";
 import { GithubIcon } from "@/components/ui/GithubIcon";
 import { Button } from "@/components/ui/Button";
 import { AccessReport } from "@/types/access-report";
-import { getAccessReport, getOAuthLoginUrl, ApiError, API_BASE_URL } from "@/lib/api";
+import { getAccessReport, getOAuthLoginUrl, ApiError } from "@/lib/api";
 import { OrganizationSearch } from "@/components/organization/OrganizationSearch";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -21,9 +21,28 @@ export default function Home() {
   const [authToken, setAuthToken] = useState<string>("");
   const [showTokenInput, setShowTokenInput] = useState<boolean>(false);
   const [tempToken, setTempToken] = useState<string>("");
+  const [oauthSuccessToast, setOauthSuccessToast] = useState<boolean>(false);
 
   useEffect(() => {
-    // Load stored token from localStorage if present
+    // 1. Check URL query params for OAuth token redirect (?token=gho_...)
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get("token");
+
+      if (tokenFromUrl && tokenFromUrl.trim()) {
+        const cleanToken = tokenFromUrl.trim();
+        setAuthToken(cleanToken);
+        setTempToken(cleanToken);
+        localStorage.setItem("github_access_token", cleanToken);
+        setOauthSuccessToast(true);
+
+        // Clean up URL query parameters in address bar
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      }
+    }
+
+    // 2. Load stored token from localStorage if present
     const storedToken = localStorage.getItem("github_access_token");
     if (storedToken) {
       setAuthToken(storedToken);
@@ -182,6 +201,19 @@ export default function Home() {
           </div>
         )}
       </header>
+
+      {/* OAuth Success Banner Toast */}
+      {oauthSuccessToast && (
+        <div className="bg-emerald-900/80 border-b border-emerald-500/30 text-emerald-200 px-4 py-2.5 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Successfully authenticated with GitHub OAuth! Your access token is active.</span>
+          </div>
+          <button onClick={() => setOauthSuccessToast(false)} className="text-emerald-300 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">

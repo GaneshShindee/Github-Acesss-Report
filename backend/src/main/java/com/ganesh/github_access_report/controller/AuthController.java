@@ -2,7 +2,7 @@ package com.ganesh.github_access_report.controller;
 
 import com.ganesh.github_access_report.model.github.OAuthTokenResponse;
 import com.ganesh.github_access_report.service.OAuthService;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.view.RedirectView;
 
@@ -11,9 +11,14 @@ import org.springframework.web.servlet.view.RedirectView;
 public class AuthController {
 
     private final OAuthService oAuthService;
+    private final String frontendUrl;
 
-    public AuthController(OAuthService oAuthService) {
+    public AuthController(
+            OAuthService oAuthService,
+            @Value("${frontend.url:http://localhost:3000}") String frontendUrl
+    ) {
         this.oAuthService = oAuthService;
+        this.frontendUrl = frontendUrl;
     }
 
     @GetMapping({"/auth/github", "/api/v1/auth/github"})
@@ -25,11 +30,12 @@ public class AuthController {
     }
 
     @GetMapping({"/auth/github/callback", "/api/v1/auth/github/callback"})
-    public ResponseEntity<OAuthTokenResponse> handleGitHubCallback(
+    public RedirectView handleGitHubCallback(
             @RequestParam("code") String code,
             @RequestParam(value = "state", required = false) String state
     ) {
         OAuthTokenResponse tokenResponse = oAuthService.exchangeCodeForToken(code);
-        return ResponseEntity.ok(tokenResponse);
+        String redirectTarget = frontendUrl.replaceAll("/$", "") + "?token=" + tokenResponse.accessToken();
+        return new RedirectView(redirectTarget);
     }
 }
