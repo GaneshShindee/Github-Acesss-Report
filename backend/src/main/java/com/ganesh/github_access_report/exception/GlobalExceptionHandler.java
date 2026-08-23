@@ -63,7 +63,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(
-            Exception ex,
+            IllegalArgumentException ex,
             HttpServletRequest request
     ) {
         log.warn("Bad request: {}", ex.getMessage());
