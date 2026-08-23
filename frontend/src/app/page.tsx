@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
-import { ShieldCheck, Info } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { ShieldCheck, Info, Key, LogOut, CheckCircle2, Lock } from "lucide-react";
 import { GithubIcon } from "@/components/ui/GithubIcon";
+import { Button } from "@/components/ui/Button";
 import { AccessReport } from "@/types/access-report";
-import { getAccessReport, ApiError } from "@/lib/api";
+import { getAccessReport, getOAuthLoginUrl, ApiError, API_BASE_URL } from "@/lib/api";
 import { OrganizationSearch } from "@/components/organization/OrganizationSearch";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -16,13 +17,49 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Authentication State
+  const [authToken, setAuthToken] = useState<string>("");
+  const [showTokenInput, setShowTokenInput] = useState<boolean>(false);
+  const [tempToken, setTempToken] = useState<string>("");
+
+  useEffect(() => {
+    // Load stored token from localStorage if present
+    const storedToken = localStorage.getItem("github_access_token");
+    if (storedToken) {
+      setAuthToken(storedToken);
+      setTempToken(storedToken);
+    }
+  }, []);
+
+  const handleSaveToken = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = tempToken.trim();
+    setAuthToken(trimmed);
+    if (trimmed) {
+      localStorage.setItem("github_access_token", trimmed);
+    } else {
+      localStorage.removeItem("github_access_token");
+    }
+    setShowTokenInput(false);
+  };
+
+  const handleClearToken = () => {
+    setAuthToken("");
+    setTempToken("");
+    localStorage.removeItem("github_access_token");
+  };
+
+  const handleOAuthLogin = () => {
+    window.location.href = getOAuthLoginUrl();
+  };
+
   const handleSearch = async (organization: string) => {
     setSearchedOrg(organization);
     setIsLoading(true);
     setError(null);
 
     try {
-      const data = await getAccessReport(organization);
+      const data = await getAccessReport(organization, authToken);
       setReport(data);
     } catch (err: unknown) {
       setReport(null);
@@ -52,7 +89,7 @@ export default function Home() {
 
       {/* Navigation Header */}
       <header className="border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-slate-800 border border-slate-700 rounded-lg text-white">
               <GithubIcon className="w-5 h-5" />
@@ -67,13 +104,83 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-slate-400">
-            <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800">
+          {/* Authentication Actions */}
+          <div className="flex items-center gap-3">
+            <span className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-400">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Spring Boot Backend Connected</span>
+              <span>Backend Connected</span>
             </span>
+
+            {/* OAuth Login Button */}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleOAuthLogin}
+              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs py-1.5 h-9"
+              leftIcon={<GithubIcon className="w-4 h-4 text-white" />}
+            >
+              <span className="hidden sm:inline">Sign in with GitHub</span>
+              <span className="sm:hidden">OAuth</span>
+            </Button>
+
+            {/* Custom Token Toggle */}
+            {authToken ? (
+              <div className="flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 px-2.5 py-1 rounded-lg text-xs font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Token Active</span>
+                <button
+                  onClick={handleClearToken}
+                  title="Clear token"
+                  className="hover:text-emerald-200 transition-colors ml-1"
+                >
+                  <LogOut className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowTokenInput(!showTokenInput)}
+                className="text-xs h-9 border border-slate-800 hover:border-slate-700 text-slate-300"
+                leftIcon={<Key className="w-3.5 h-3.5 text-indigo-400" />}
+              >
+                PAT Token
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Custom PAT Token Input Panel */}
+        {showTokenInput && (
+          <div className="border-t border-slate-800 bg-slate-900/90 backdrop-blur-xl px-4 py-3">
+            <form onSubmit={handleSaveToken} className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center gap-3">
+              <div className="flex-1 relative w-full">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  placeholder="Paste GitHub Personal Access Token (PAT) or OAuth token..."
+                  value={tempToken}
+                  onChange={(e) => setTempToken(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-center">
+                <Button type="submit" size="sm" variant="primary" className="text-xs h-8">
+                  Save Token
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowTokenInput(false)}
+                  className="text-xs h-8 text-slate-400"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </div>
+        )}
       </header>
 
       {/* Main Container */}
@@ -109,7 +216,7 @@ export default function Home() {
                 Ready to Explore Organization Access
               </h3>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-                Enter a GitHub organization to generate an access report.
+                Enter a GitHub organization to generate an access report. You can also sign in with GitHub OAuth or provide a custom token in the header.
               </p>
             </div>
           )}
